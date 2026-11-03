@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SEC Physics Lab Inventory</title>
+  <meta name="description" content="Physics Laboratory inventory catalog — Surigao Education Center">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" class="logo" alt="SEC Physics Lab logo">
+      <div>
+        <h1>Physics Laboratory</h1>
+        <p>Inventory Catalog</p>
+      </div>
+    </div>
+    <input id="search" class="search" type="search" placeholder="Search name, description, model, serial, code…" autocomplete="off">
+    <div class="top-actions">
+      <button id="refreshBtn" class="btn icon" title="Refresh" aria-label="Refresh">⟳</button>
+      <button id="settingsBtn" class="btn icon" title="Connection settings" aria-label="Settings">⚙</button>
+      <button id="addBtn" class="btn primary">+ Add<span class="hide-sm">&nbsp;Item</span></button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div id="chips" class="chips" role="tablist"></div>
+    <div class="toolbar-right">
+      <span id="resultCount" class="muted"></span>
+      <select id="sort" aria-label="Sort">
+        <option value="no">Sort: No.</option>
+        <option value="name">Sort: Name A–Z</option>
+        <option value="status">Sort: Status</option>
+        <option value="newest">Sort: Newest first</option>
+      </select>
+    </div>
+  </div>
+
+  <main id="grid" class="grid" aria-live="polite"></main>
+  <div id="empty" class="empty" hidden></div>
+
+  <footer class="footer">Created by: Roland Resullar &amp; Claude</footer>
+
+  <!-- capture="environment" opens the back camera on phones; desktops get a file picker -->
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+  <div id="modalRoot"></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
