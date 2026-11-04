@@ -23,7 +23,10 @@ const FIELDS = [
   { key: 'property_code', label: 'Property Code Number', full: true },
   { key: 'remarks', label: 'Remarks', full: true, multiline: true },
 ];
-const MAX_PHOTO_SIDE = 1600;   // px; photos are shrunk before upload to keep them quick
+const MAX_PHOTO_SIDE = 480;    // px; thumbnail quality is all the catalog needs
+const PHOTO_QUALITY = 0.7;     // JPEG quality; a photo ends up around 20–40 KB
+const THUMB_BATCH = 24;        // photos fetched per request (matches the Apps Script limit)
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const FINE_POINTER = window.matchMedia('(pointer: fine)').matches;
 
 const state = {
@@ -34,7 +37,7 @@ const state = {
   search: '',
   sort: 'no',
   uploading: new Map(),   // itemId -> number of uploads in progress
-  previews: {},           // photoId -> local data URL, shown until Drive's thumbnail is ready
+  previews: {},           // photoId -> data URL (fetched through the script, or just taken)
   loaded: false,
 };
 
@@ -111,10 +114,57 @@ const coverOf = id => {
   const photos = photosOf(id);
   return photos.find(p => p.cover) || photos[0] || null;
 };
-const thumbUrl = (photo, width = 800) =>
-  state.previews[photo.id] || `https://drive.google.com/thumbnail?id=${encodeURIComponent(photo.id)}&sz=w${width}`;
-const fallbackUrl = id => `https://lh3.googleusercontent.com/d/${encodeURIComponent(id)}=w800`;
+const thumbUrl = photo => state.previews[photo.id] || BLANK;
 const driveUrl = photo => `https://drive.google.com/file/d/${encodeURIComponent(photo.id)}/view`;
+
+// ------------------------------------------------------------------ photo loading
+// Photos come through the Apps Script as data URLs, so they show even when the
+// Drive account doesn't allow link sharing. Only photos scrolled into view are fetched.
+
+const thumbQueue = new Set();
+const thumbLoading = new Set();
+let thumbTimer;
+const thumbObserver = 'IntersectionObserver' in window
+  ? new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      thumbObserver.unobserve(entry.target);
+      queueThumb(entry.target.dataset.photoId);
+    }), { rootMargin: '400px' })
+  : null;
+
+function observeThumbs(root = document) {
+  $$('img[data-photo-id]', root).forEach(img => {
+    if (state.previews[img.dataset.photoId]) return;
+    if (thumbObserver) thumbObserver.observe(img);
+    else queueThumb(img.dataset.photoId);
+  });
+}
+
+function queueThumb(id) {
+  if (!id || state.previews[id] || thumbLoading.has(id)) return;
+  thumbQueue.add(id);
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(flushThumbs, 80);
+}
+
+async function flushThumbs() {
+  while (thumbQueue.size) {
+    const ids = [...thumbQueue].slice(0, THUMB_BATCH);
+    ids.forEach(id => { thumbQueue.delete(id); thumbLoading.add(id); });
+    try {
+      const data = await api('thumbs', { ids });
+      ids.forEach(id => {
+        if (!data[id]) return;
+        state.previews[id] = data[id];
+        $$(`img[data-photo-id="${CSS.escape(id)}"]`).forEach(img => { img.src = data[id]; });
+      });
+    } catch (err) {
+      console.warn('Could not load photos:', err.message);
+    } finally {
+      ids.forEach(id => thumbLoading.delete(id));
+    }
+  }
+}
 
 let toastTimer;
 function toast(message, isError = false) {
@@ -164,7 +214,7 @@ function cardHtml(item) {
   if (item.property_code) meta.push(`Code: ${esc(item.property_code)}`);
 
   const photo = cover
-    ? `<img src="${esc(thumbUrl(cover, 600))}" data-photo-id="${esc(cover.id)}" alt="" loading="lazy">`
+    ? `<img src="${esc(thumbUrl(cover))}" data-photo-id="${esc(cover.id)}" alt="">`
     : `<div class="ph"><span>📷</span>${FINE_POINTER ? 'Drop a photo or click' : 'Tap to take a photo'}</div>`;
 
   return `
@@ -202,12 +252,16 @@ function render() {
   $('#empty').hidden = true;
   $('#grid').hidden = false;
   $('#grid').innerHTML = items.map(cardHtml).join('');
+  observeThumbs($('#grid'));
 }
 
 function renderCard(itemId) {
   const old = $(`.card[data-id="${itemId}"]`);
   const item = findItem(itemId);
-  if (old && item) old.outerHTML = cardHtml(item);
+  if (old && item) {
+    old.outerHTML = cardHtml(item);
+    observeThumbs($(`.card[data-id="${itemId}"]`));
+  }
 }
 
 function renderEmpty(message) {
@@ -237,7 +291,7 @@ async function prepareImage(file) {
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
   canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const dataUrl = canvas.toDataURL('image/jpeg', PHOTO_QUALITY);
   return { dataUrl, data: dataUrl.split(',')[1], mimeType: 'image/jpeg' };
 }
 
@@ -480,6 +534,7 @@ function editItem(itemId) {
 
   const form = $('form', modal);
   const photoBox = $('.form-photo .photo', modal);
+  observeThumbs(modal);
 
   function stage(files) {
     staged = files[0];
@@ -541,7 +596,7 @@ function galleryHtml(itemId) {
   return `<div class="gallery">
     ${photos.map(p => `
       <div class="shot ${p.cover ? 'cover' : ''}">
-        <img src="${esc(thumbUrl(p, 500))}" data-photo-id="${esc(p.id)}" alt="" loading="lazy">
+        <img src="${esc(thumbUrl(p))}" data-photo-id="${esc(p.id)}" alt="">
         <div class="cap">${p.cover ? '★ Cover · ' : ''}${esc(p.uploaded || p.name)}</div>
         <div class="row">
           ${p.cover ? '' : `<button class="btn" data-cover="${esc(p.id)}">★ Cover</button>`}
@@ -564,6 +619,7 @@ function openGallery(itemId) {
       ${state.folderUrl ? `<a class="btn" href="${esc(state.folderUrl)}" target="_blank" rel="noopener">Open Drive folder</a>` : ''}
     </div>
     <div class="gallery-body">${galleryHtml(item.id)}</div>`, 'wide');
+  observeThumbs(modal);
   modal.dataset.gallery = item.id;
   setupDrop(modal, files => uploadPhotos(item.id, files, false));
 
@@ -594,7 +650,9 @@ function openGallery(itemId) {
 
 function refreshGallery(itemId) {
   const modal = $(`.modal[data-gallery="${itemId}"]`);
-  if (modal) $('.gallery-body', modal).innerHTML = galleryHtml(Number(itemId));
+  if (!modal) return;
+  $('.gallery-body', modal).innerHTML = galleryHtml(Number(itemId));
+  observeThumbs(modal);
 }
 
 // ------------------------------------------------------------------ delete & settings
@@ -703,15 +761,6 @@ function init() {
     photo.classList.remove('drag');
     uploadPhotos(photo.closest('.card').dataset.id, e.dataTransfer.files, true);
   });
-
-  // Drive thumbnails can lag right after upload; fall back to another Drive image URL
-  document.addEventListener('error', e => {
-    const img = e.target;
-    if (img.tagName === 'IMG' && img.dataset.photoId && !img.dataset.retried) {
-      img.dataset.retried = '1';
-      img.src = fallbackUrl(img.dataset.photoId);
-    }
-  }, true);
 
   $('#chips').addEventListener('click', e => {
     const chip = e.target.closest('[data-status]');

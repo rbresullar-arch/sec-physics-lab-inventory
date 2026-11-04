@@ -78,7 +78,9 @@ On a phone, use **Share → Add to Home Screen** to get an app icon.
 | **+ Add Item** | New item, optionally with a photo |
 | On a PC | Drag an image onto a card's photo to upload it |
 
-Photos are shrunk to 1600 px (JPEG) before upload so they send quickly over mobile data.
+Photos are shrunk to thumbnail size (480 px JPEG, about 20–40 KB) before upload, so they send
+quickly over mobile data. The site loads them through the Apps Script, so they show even if your
+Google account doesn't allow "anyone with the link" sharing (common on school accounts).
 Deleting a photo moves it to the Drive trash (recoverable). Deleting an item keeps its photo folder in Drive.
 
 ## Updating the backend later

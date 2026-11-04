@@ -28,6 +28,8 @@ const FIELDS = [
 ];
 const EDITABLE = FIELDS.map(f => f[0]).filter(k => k !== 'id');
 const PHOTO_HEADERS = ['Photo ID', 'Item No.', 'File Name', 'Cover', 'Uploaded'];
+const THUMB_BATCH = 24;               // photos per "thumbs" request
+const MAX_DIRECT_BYTES = 120 * 1024;  // bigger files are sent as Drive's thumbnail instead
 
 // ------------------------------------------------------------------ menu & setup
 
@@ -160,6 +162,26 @@ const ACTIONS = {
       photo.cover = true;
     }
     return photo;
+  },
+
+  /**
+   * Returns photos as data URLs so the web app never needs Drive link sharing
+   * (school accounts often block "anyone with the link"). Large older photos are
+   * sent as Drive's own small thumbnail.
+   */
+  thumbs: function (body) {
+    const out = {};
+    (body.ids || []).slice(0, THUMB_BATCH).forEach(id => {
+      try {
+        const file = DriveApp.getFileById(id);
+        let blob = file.getSize() > MAX_DIRECT_BYTES ? file.getThumbnail() : null;
+        blob = blob || file.getBlob();
+        out[id] = 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+      } catch (err) {
+        out[id] = null;
+      }
+    });
+    return out;
   },
 
   setCover: function (body) {
