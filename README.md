@@ -83,6 +83,18 @@ quickly over mobile data. The site loads them through the Apps Script, so they s
 Google account doesn't allow "anyone with the link" sharing (common on school accounts).
 Deleting a photo moves it to the Drive trash (recoverable). Deleting an item keeps its photo folder in Drive.
 
+## Updating the website later
+
+Phones cache the site, so each release carries a version number. When you change anything in
+`docs/`, give it a new version (e.g. `2026.11.05-1`) in all three places:
+
+- `docs/version.json`
+- `APP_VERSION` at the top of `docs/app.js`
+- the `?v=` tags on `styles.css`, `config.js` and `app.js` in `docs/index.html`
+
+Open copies of the site check `version.json` when they load and reload themselves onto the new
+version. The version shows in the green footer, so you can see which one a phone is running.
+
 ## Updating the backend later
 
 After changing `Code.gs`: **Deploy → Manage deployments → ✏ Edit → Version: New version → Deploy**.

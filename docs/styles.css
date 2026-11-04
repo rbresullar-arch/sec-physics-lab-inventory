@@ -156,6 +156,7 @@ select { width: auto; cursor: pointer; }
   background: var(--secondary); color: #fff; font-size: 13px;
   padding: 6px 28px; padding-bottom: max(6px, env(safe-area-inset-bottom));
 }
+.footer .version { opacity: .7; margin-left: 6px; }
 
 /* ---------------------------------------------------------------- modals */
 .overlay {

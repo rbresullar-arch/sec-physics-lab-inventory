@@ -4,6 +4,9 @@
  */
 'use strict';
 
+// Bump this together with docs/version.json and the ?v= tags in index.html on every release
+const APP_VERSION = '2026.11.04-1';
+
 const STATUSES = ['Working', 'Broken', 'For Repair', 'Missing'];
 const STATUS_COLORS = {
   'Working': '#16A34A',
@@ -787,7 +790,28 @@ function init() {
     }
   });
 
+  $('#version').textContent = 'v' + APP_VERSION;
   load();
+  checkForUpdate();
+}
+
+/**
+ * Phones (and home-screen shortcuts) can keep running an old cached copy of the site.
+ * version.json is fetched fresh; if it names a newer version, reload with a new URL,
+ * which makes the browser fetch the new files.
+ */
+async function checkForUpdate() {
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const { version } = await res.json();
+    if (!version || version === APP_VERSION) return;
+    const tried = 'physlab.reloadedFor';
+    if (sessionStorage.getItem(tried) === version) return;   // never loop
+    sessionStorage.setItem(tried, version);
+    location.replace(location.pathname + '?v=' + encodeURIComponent(version));
+  } catch (err) {
+    // Offline or storage blocked: keep running the copy we have
+  }
 }
 
 init();
