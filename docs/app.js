@@ -23,8 +23,8 @@ const FIELDS = [
   { key: 'property_code', label: 'Property Code Number', full: true },
   { key: 'remarks', label: 'Remarks', full: true, multiline: true },
 ];
-const MAX_PHOTO_SIDE = 480;    // px; thumbnail quality is all the catalog needs
-const PHOTO_QUALITY = 0.7;     // JPEG quality; a photo ends up around 20–40 KB
+const PHOTO_SHORT_SIDE = 240;  // px ("240p"): 320x240 or 240x320, all the catalog cards need
+const PHOTO_QUALITY = 0.7;     // JPEG quality; a photo ends up around 8–15 KB
 const THUMB_BATCH = 24;        // photos fetched per request (matches the Apps Script limit)
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const FINE_POINTER = window.matchMedia('(pointer: fine)').matches;
@@ -282,11 +282,11 @@ function loadImage(file) {
   });
 }
 
-/** Shrinks a camera photo to a JPEG no larger than MAX_PHOTO_SIDE on its long side */
+/** Shrinks a camera photo to a 240p JPEG (PHOTO_SHORT_SIDE on its short side) */
 async function prepareImage(file) {
   const img = await loadImage(file);
   const w = img.naturalWidth, h = img.naturalHeight;
-  const scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(w, h));
+  const scale = Math.min(1, PHOTO_SHORT_SIDE / Math.min(w, h));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
