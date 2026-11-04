@@ -219,10 +219,9 @@ function cardHtml(item) {
 
   return `
     <article class="card" data-id="${item.id}" title="Click to quick-edit Quantity, Status and Remarks">
-      <div class="photo ${cover ? 'has' : ''}" data-action="photo" title="Take or add a photo">
+      <div class="photo ${cover ? 'has' : ''}" data-action="photo" title="${cover ? 'Open photos' : 'Take or add a photo'}">
         ${photo}
         ${count > 1 ? `<span class="badge">🖼 ${count}</span>` : ''}
-        ${cover ? '<span class="camera-btn" aria-hidden="true">📷</span>' : ''}
         ${state.uploading.get(item.id) ? '<div class="uploading"><div class="spinner"></div>Saving to Drive…</div>' : ''}
       </div>
       <div class="body">
@@ -734,7 +733,8 @@ function init() {
     const id = Number(card.dataset.id);
     const action = e.target.closest('[data-action]');
     switch (action && action.dataset.action) {
-      case 'photo': pickPhoto(id); break;
+      // An item that already has a photo opens its Photos window; otherwise go straight to the camera
+      case 'photo': if (photosOf(id).length) openGallery(id); else pickPhoto(id); break;
       case 'edit': editItem(id); break;
       case 'photos': openGallery(id); break;
       case 'delete': deleteItem(id); break;

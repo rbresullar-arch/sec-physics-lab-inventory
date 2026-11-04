@@ -71,7 +71,7 @@ On a phone, use **Share → Add to Home Screen** to get an app icon.
 
 | Do this | What happens |
 |---|---|
-| Tap a card's **photo** | Opens the camera. The picture becomes that item's cover and is saved to Drive |
+| Tap a card's **photo** | No photo yet: opens the camera, and the picture becomes the item's cover. Has a photo: opens its **Photos** window |
 | Tap anywhere else on a card | Mini window: **Quantity → Status → Remarks** (swipe, ◀ ▶, or ← → keys) |
 | **Edit** | Full form with all fields |
 | **Photos** | All photos for the item: take more, choose files, set ★ cover, open in Drive, delete |
