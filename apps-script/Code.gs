@@ -25,8 +25,9 @@ const FIELDS = [
   ['serial_number', 'Serial Number'],
   ['property_code', 'Property Code Number'],
   ['remarks', 'Remarks'],
+  ['updated', 'Updated'],   // set by the script on every add/edit; used by the desktop sync
 ];
-const EDITABLE = FIELDS.map(f => f[0]).filter(k => k !== 'id');
+const EDITABLE = FIELDS.map(f => f[0]).filter(k => k !== 'id' && k !== 'updated');
 const PHOTO_HEADERS = ['Photo ID', 'Item No.', 'File Name', 'Cover', 'Uploaded'];
 const THUMB_BATCH = 24;               // photos per "thumbs" request
 const MAX_DIRECT_BYTES = 120 * 1024;  // bigger files are sent as Drive's thumbnail instead
@@ -51,7 +52,7 @@ function setup() {
   ensureSheet_(ss, INVENTORY_SHEET, FIELDS.map(f => f[1]));
   ensureSheet_(ss, PHOTOS_SHEET, PHOTO_HEADERS);
   // Plain text keeps values like "23-00-651'" and "6 - Broken" exactly as typed
-  ss.getSheetByName(INVENTORY_SHEET).getRange('A:K').setNumberFormat('@');
+  ss.getSheetByName(INVENTORY_SHEET).getRange('A:L').setNumberFormat('@');
   ss.getSheetByName(PHOTOS_SHEET).getRange('A:E').setNumberFormat('@');
 
   if (!folderExists_(props.getProperty('FOLDER_ID'))) {
@@ -106,23 +107,25 @@ const ACTIONS = {
   },
 
   addItem: function (body) {
-    const sheet = sheet_(INVENTORY_SHEET);
+    const sheet = inventorySheet_();
     const items = readItems_();
     const item = { id: items.reduce((max, i) => Math.max(max, i.id), 0) + 1 };
     EDITABLE.forEach(k => item[k] = clean_(body.item && body.item[k]));
     if (!item.item_name) throw new Error('Name of Item is required.');
+    item.updated = new Date().toISOString();
     sheet.appendRow(rowFor_(headers_(sheet), item, []));
     return item;
   },
 
   updateItem: function (body) {
-    const sheet = sheet_(INVENTORY_SHEET);
+    const sheet = inventorySheet_();
     const found = findItemRow_(sheet, body.id);
     const item = found.item;
     EDITABLE.forEach(k => {
       if (body.changes && k in body.changes) item[k] = clean_(body.changes[k]);
     });
     if (!item.item_name) throw new Error('Name of Item is required.');
+    item.updated = new Date().toISOString();
     sheet.getRange(found.row, 1, 1, found.values.length)
       .setValues([rowFor_(found.headers, item, found.values)]);
     return item;
@@ -219,6 +222,18 @@ function ensureSheet_(ss, name, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/** The Inventory tab, with the "Updated" column added if this sheet predates it */
+function inventorySheet_() {
+  const sheet = sheet_(INVENTORY_SHEET);
+  const headers = headers_(sheet);
+  if (headers.indexOf('Updated') < 0) {
+    const col = headers.length + 1;
+    sheet.getRange(1, col, sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, col).setValue('Updated').setFontWeight('bold');
   }
   return sheet;
 }
