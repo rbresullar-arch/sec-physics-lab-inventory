@@ -5,7 +5,7 @@
 'use strict';
 
 // Bump this together with docs/version.json and the ?v= tags in index.html on every release
-const APP_VERSION = '2026.11.04-1';
+const APP_VERSION = '2026.11.13-1';
 
 const STATUSES = ['Working', 'Broken', 'For Repair', 'Missing'];
 const STATUS_COLORS = {
@@ -39,6 +39,7 @@ const state = {
   status: 'All',
   search: '',
   sort: 'no',
+  open: null,             // id of the row that is opened to show its photo
   uploading: new Map(),   // itemId -> number of uploads in progress
   previews: {},           // photoId -> data URL (fetched through the script, or just taken)
   loaded: false,
@@ -103,6 +104,7 @@ async function load() {
     state.folderUrl = data.folderUrl;
     state.loaded = true;
     render();
+    preloadPhotos();
   } catch (err) {
     renderEmpty('Could not load the inventory.\n' + err.message);
     toast(err.message, true);
@@ -122,25 +124,24 @@ const driveUrl = photo => `https://drive.google.com/file/d/${encodeURIComponent(
 
 // ------------------------------------------------------------------ photo loading
 // Photos come through the Apps Script as data URLs, so they show even when the
-// Drive account doesn't allow link sharing. Only photos scrolled into view are fetched.
+// Drive account doesn't allow link sharing. They are all fetched in the background as
+// soon as the inventory loads (cover photos first), so opening a row shows its photo at once.
 
 const thumbQueue = new Set();
 const thumbLoading = new Set();
 let thumbTimer;
-const thumbObserver = 'IntersectionObserver' in window
-  ? new IntersectionObserver(entries => entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      thumbObserver.unobserve(entry.target);
-      queueThumb(entry.target.dataset.photoId);
-    }), { rootMargin: '400px' })
-  : null;
 
-function observeThumbs(root = document) {
-  $$('img[data-photo-id]', root).forEach(img => {
-    if (state.previews[img.dataset.photoId]) return;
-    if (thumbObserver) thumbObserver.observe(img);
-    else queueThumb(img.dataset.photoId);
+function preloadPhotos() {
+  state.items.forEach(item => {
+    const cover = coverOf(item.id);
+    if (cover) queueThumb(cover.id);
   });
+  state.photos.forEach(photo => queueThumb(photo.id));
+}
+
+/** Fetch any photos shown inside `root` that aren't loaded yet (e.g. right after an upload) */
+function observeThumbs(root = document) {
+  $$('img[data-photo-id]', root).forEach(img => queueThumb(img.dataset.photoId));
 }
 
 function queueThumb(id) {
@@ -209,35 +210,57 @@ function renderChips() {
     </button>`).join('');
 }
 
-function cardHtml(item) {
+function photoBoxHtml(item) {
   const cover = coverOf(item.id);
   const count = photosOf(item.id).length;
-  const color = STATUS_COLORS[item.status] || '#6B7280';
-  const meta = [`Qty: ${esc(item.qty_present) || '—'}`];
-  if (item.property_code) meta.push(`Code: ${esc(item.property_code)}`);
-
   const photo = cover
     ? `<img src="${esc(thumbUrl(cover))}" data-photo-id="${esc(cover.id)}" alt="">`
     : `<div class="ph"><span>📷</span>${FINE_POINTER ? 'Drop a photo or click' : 'Tap to take a photo'}</div>`;
+  return `
+    <div class="photo ${cover ? 'has' : ''}" data-action="photo" title="${cover ? 'Open photos' : 'Take or add a photo'}">
+      ${photo}
+      ${count > 1 ? `<span class="badge">🖼 ${count}</span>` : ''}
+      ${state.uploading.get(item.id) ? '<div class="uploading"><div class="spinner"></div>Saving to Drive…</div>' : ''}
+    </div>`;
+}
+
+function rowHtml(item) {
+  const open = state.open === item.id;
+  const count = photosOf(item.id).length;
+  const color = STATUS_COLORS[item.status] || '#6B7280';
+  const sub = [item.description, `Qty: ${item.qty_present || '—'}`];
+  if (item.property_code) sub.push(`Code: ${item.property_code}`);
+  const facts = FIELDS.filter(f => f.key !== 'item_name' && f.key !== 'description' && item[f.key])
+    .map(f => `<dt>${esc(f.label)}</dt><dd>${esc(item[f.key])}</dd>`).join('');
 
   return `
-    <article class="card" data-id="${item.id}" title="Click to quick-edit Quantity, Status and Remarks">
-      <div class="photo ${cover ? 'has' : ''}" data-action="photo" title="${cover ? 'Open photos' : 'Take or add a photo'}">
-        ${photo}
-        ${count > 1 ? `<span class="badge">🖼 ${count}</span>` : ''}
-        ${state.uploading.get(item.id) ? '<div class="uploading"><div class="spinner"></div>Saving to Drive…</div>' : ''}
-      </div>
-      <div class="body">
-        <h3>${esc(item.item_name)}</h3>
-        <p class="desc">${esc(item.description) || 'No description'}</p>
-        <p class="meta">${meta.join(' · ')}</p>
-        <span class="pill" style="--c:${color}">● ${esc(item.status) || 'No status'}</span>
-      </div>
-      <div class="actions">
-        <button class="btn sm" data-action="edit">Edit</button>
-        <button class="btn sm" data-action="photos">Photos</button>
-        <button class="btn sm danger" data-action="delete">Delete</button>
-      </div>
+    <article class="row ${open ? 'open' : ''}" data-id="${item.id}">
+      <button class="row-head" data-action="toggle" aria-expanded="${open}">
+        <span class="row-no">${item.id > 0 ? item.id : ''}</span>
+        <span class="row-main">
+          <span class="row-name">${esc(item.item_name)}</span>
+          <span class="row-sub">${esc(sub.filter(Boolean).join(' · '))}</span>
+        </span>
+        <span class="row-side">
+          <span class="pill" style="--c:${color}">● ${esc(item.status) || 'No status'}</span>
+          ${count ? `<span class="row-pics">🖼 ${count}</span>` : ''}
+        </span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      ${open ? `
+      <div class="row-detail">
+        ${photoBoxHtml(item)}
+        <div>
+          ${item.description ? `<p class="muted" style="margin:0 0 10px">${esc(item.description)}</p>` : ''}
+          <dl class="facts">${facts}</dl>
+          <div class="actions">
+            <button class="btn sm primary" data-action="quick">Quick edit</button>
+            <button class="btn sm" data-action="edit">Edit</button>
+            <button class="btn sm" data-action="photos">Photos</button>
+            <button class="btn sm danger" data-action="delete">Delete</button>
+          </div>
+        </div>
+      </div>` : ''}
     </article>`;
 }
 
@@ -253,16 +276,27 @@ function render() {
   }
   $('#empty').hidden = true;
   $('#grid').hidden = false;
-  $('#grid').innerHTML = items.map(cardHtml).join('');
-  observeThumbs($('#grid'));
+  $('#grid').innerHTML = items.map(rowHtml).join('');
 }
 
-function renderCard(itemId) {
-  const old = $(`.card[data-id="${itemId}"]`);
+function renderRow(itemId) {
+  const old = $(`.row[data-id="${itemId}"]`);
   const item = findItem(itemId);
   if (old && item) {
-    old.outerHTML = cardHtml(item);
-    observeThumbs($(`.card[data-id="${itemId}"]`));
+    old.outerHTML = rowHtml(item);
+    observeThumbs($(`.row[data-id="${itemId}"]`));
+  }
+}
+
+/** Open a row to show its photo and details; only one row is open at a time */
+function toggleRow(itemId) {
+  const previous = state.open;
+  state.open = previous === itemId ? null : itemId;
+  if (previous !== null) renderRow(previous);
+  if (state.open !== null) {
+    renderRow(state.open);
+    const row = $(`.row[data-id="${state.open}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
 
@@ -303,7 +337,7 @@ async function uploadPhotos(itemId, files, makeCover) {
   if (!images.length) return;
 
   state.uploading.set(itemId, (state.uploading.get(itemId) || 0) + images.length);
-  renderCard(itemId);
+  renderRow(itemId);
   let saved = 0;
   for (const [index, file] of images.entries()) {
     try {
@@ -319,7 +353,7 @@ async function uploadPhotos(itemId, files, makeCover) {
       toast(`Photo not saved: ${err.message}`, true);
     } finally {
       state.uploading.set(itemId, state.uploading.get(itemId) - 1);
-      renderCard(itemId);
+      renderRow(itemId);
       refreshGallery(itemId);
     }
   }
@@ -635,13 +669,13 @@ function openGallery(itemId) {
         await api('setCover', { itemId: item.id, photoId: cover.dataset.cover });
         photosOf(item.id).forEach(p => { p.cover = p.id === cover.dataset.cover; });
         refreshGallery(item.id);
-        renderCard(item.id);
+        renderRow(item.id);
       }
       if (remove && confirm('Delete this photo? It moves to the Google Drive trash.')) {
         await api('deletePhoto', { photoId: remove.dataset.remove });
         state.photos = state.photos.filter(p => p.id !== remove.dataset.remove);
         refreshGallery(item.id);
-        renderCard(item.id);
+        renderRow(item.id);
         toast('Photo deleted');
       }
     } catch (err) {
@@ -731,21 +765,22 @@ function init() {
   const grid = $('#grid');
 
   grid.addEventListener('click', e => {
-    const card = e.target.closest('.card');
-    if (!card) return;
-    const id = Number(card.dataset.id);
+    const row = e.target.closest('.row');
     const action = e.target.closest('[data-action]');
-    switch (action && action.dataset.action) {
+    if (!row || !action) return;
+    const id = Number(row.dataset.id);
+    switch (action.dataset.action) {
+      case 'toggle': toggleRow(id); break;
       // An item that already has a photo opens its Photos window; otherwise go straight to the camera
       case 'photo': if (photosOf(id).length) openGallery(id); else pickPhoto(id); break;
+      case 'quick': quickEdit(id); break;
       case 'edit': editItem(id); break;
       case 'photos': openGallery(id); break;
       case 'delete': deleteItem(id); break;
-      default: quickEdit(id);
     }
   });
 
-  // Drop a photo onto a card's picture
+  // Drop a photo onto an open row's picture
   grid.addEventListener('dragover', e => {
     const photo = e.target.closest('.photo');
     if (!photo || ![...e.dataTransfer.types].includes('Files')) return;
@@ -762,7 +797,7 @@ function init() {
     if (!photo) return;
     e.preventDefault();
     photo.classList.remove('drag');
-    uploadPhotos(photo.closest('.card').dataset.id, e.dataTransfer.files, true);
+    uploadPhotos(photo.closest('.row').dataset.id, e.dataTransfer.files, true);
   });
 
   $('#chips').addEventListener('click', e => {
