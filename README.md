@@ -71,12 +71,16 @@ On a phone, use **Share → Add to Home Screen** to get an app icon.
 
 | Do this | What happens |
 |---|---|
-| Tap a card's **photo** | No photo yet: opens the camera, and the picture becomes the item's cover. Has a photo: opens its **Photos** window |
-| Tap anywhere else on a card | Mini window: **Quantity → Status → Remarks** (swipe, ◀ ▶, or ← → keys) |
+| Tap an item in the list | Opens it to show its **photo**, details and buttons (tap again to close) |
+| Tap the opened item's **photo** | No photo yet: opens the camera, and the picture becomes the item's cover. Has a photo: opens its **Photos** window |
+| **Quick edit** | Mini window: **Quantity → Status → Remarks** (swipe, ◀ ▶, or ← → keys) |
 | **Edit** | Full form with all fields |
 | **Photos** | All photos for the item: take more, choose files, set ★ cover, open in Drive, delete |
 | **+ Add Item** | New item, optionally with a photo |
-| On a PC | Drag an image onto a card's photo to upload it |
+| On a PC | Drag an image onto an opened item's photo to upload it |
+
+All photos start downloading in the background as soon as the site opens, so an item's photo
+shows straight away when you open it.
 
 Photos are shrunk to 240p (320×240 JPEG, about 8–15 KB) before upload, so they send
 quickly over mobile data. The site loads them through the Apps Script, so they show even if your
