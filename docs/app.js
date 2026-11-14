@@ -5,7 +5,7 @@
 'use strict';
 
 // Bump this together with docs/version.json and the ?v= tags in index.html on every release
-const APP_VERSION = '2026.11.13-1';
+const APP_VERSION = '2026.11.14-1';
 
 const STATUSES = ['Working', 'Broken', 'For Repair', 'Missing'];
 const STATUS_COLORS = {
@@ -120,6 +120,12 @@ const coverOf = id => {
   return photos.find(p => p.cover) || photos[0] || null;
 };
 const thumbUrl = photo => state.previews[photo.id] || BLANK;
+/** When the present quantity changes, the old present quantity becomes the previous one.
+ *  Returns the new previous quantity, or null when nothing should move. */
+function shiftedPrevious(item, newPresent) {
+  const old = String(item.qty_present ?? '').trim();
+  return old && String(newPresent).trim() !== old ? old : null;
+}
 const driveUrl = photo => `https://drive.google.com/file/d/${encodeURIComponent(photo.id)}/view`;
 
 // ------------------------------------------------------------------ photo loading
@@ -414,7 +420,7 @@ function quickEdit(itemId) {
     <div class="pages">
       <section class="page">
         <label>Qty. Present (M/Y)<input class="big qty" value="${esc(item.qty_present)}" enterkeyhint="done"></label>
-        <p class="muted">Previous: ${esc(item.qty_previous) || '—'}</p>
+        <p class="muted prev">Previous: ${esc(item.qty_previous) || '—'}</p>
       </section>
       <section class="page">
         <div class="status-grid">
@@ -458,15 +464,23 @@ function quickEdit(itemId) {
     return left ? start === 0 : start === len;
   }
 
+  // Show what the previous quantity will become as the present one is changed
+  qty.addEventListener('input', () => {
+    const moved = shiftedPrevious(item, qty.value);
+    $('.prev', modal).textContent = moved !== null
+      ? `Previous will become: ${moved}`
+      : `Previous: ${item.qty_previous || '—'}`;
+  });
+
   async function save() {
     const button = $('[data-save]', modal);
     button.disabled = true;
     button.textContent = 'Saving…';
     try {
-      const updated = await api('updateItem', {
-        id: item.id,
-        changes: { qty_present: qty.value, status, remarks: remarks.value },
-      });
+      const changes = { qty_present: qty.value, status, remarks: remarks.value };
+      const moved = shiftedPrevious(item, qty.value);
+      if (moved !== null) changes.qty_previous = moved;
+      const updated = await api('updateItem', { id: item.id, changes });
       Object.assign(item, updated);
       closeModal(modal);
       render();
@@ -587,6 +601,19 @@ function editItem(itemId) {
   });
   setupDrop(photoBox, files => stage(files));
   form.addEventListener('submit', e => { e.preventDefault(); save(); });
+
+  // Changing the present quantity fills in the previous one with the old present value,
+  // unless the previous quantity was typed in by hand
+  if (item) {
+    const present = form.elements.qty_present, previous = form.elements.qty_previous;
+    let previousTyped = false;
+    previous.addEventListener('input', () => { previousTyped = true; });
+    present.addEventListener('input', () => {
+      if (previousTyped) return;
+      const moved = shiftedPrevious(item, present.value);
+      previous.value = moved !== null ? moved : (item.qty_previous || '');
+    });
+  }
 
   async function save() {
     const data = Object.fromEntries(new FormData(form).entries());
