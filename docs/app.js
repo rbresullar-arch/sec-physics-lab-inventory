@@ -5,7 +5,7 @@
 'use strict';
 
 // Bump this together with docs/version.json and the ?v= tags in index.html on every release
-const APP_VERSION = '2026.11.14-1';
+const APP_VERSION = '2026.11.14-2';
 
 const STATUSES = ['Working', 'Broken', 'For Repair', 'Missing'];
 const STATUS_COLORS = {
@@ -230,6 +230,22 @@ function photoBoxHtml(item) {
     </div>`;
 }
 
+/** Inventory checks are monthly: an item edited since the 1st of this month counts as updated.
+ *  Returns the edit time, or null. */
+function updatedThisMonth(item) {
+  if (!item.updated) return null;
+  const when = new Date(item.updated);
+  const now = new Date();
+  return when >= new Date(now.getFullYear(), now.getMonth(), 1) ? when : null;
+}
+
+function updatedTagHtml(item) {
+  const when = updatedThisMonth(item);
+  return when
+    ? `<span class="tag updated">✓ Updated ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>`
+    : '<span class="tag stale">Not updated</span>';
+}
+
 function rowHtml(item) {
   const open = state.open === item.id;
   const count = photosOf(item.id).length;
@@ -248,6 +264,7 @@ function rowHtml(item) {
           <span class="row-sub">${esc(sub.filter(Boolean).join(' · '))}</span>
         </span>
         <span class="row-side">
+          ${updatedTagHtml(item)}
           <span class="pill" style="--c:${color}">● ${esc(item.status) || 'No status'}</span>
           ${count ? `<span class="row-pics">🖼 ${count}</span>` : ''}
         </span>
@@ -273,7 +290,9 @@ function rowHtml(item) {
 function render() {
   renderChips();
   const items = visibleItems();
-  $('#resultCount').textContent = `Showing ${items.length} of ${state.items.length}`;
+  const updated = state.items.filter(updatedThisMonth).length;
+  $('#resultCount').textContent =
+    `Showing ${items.length} of ${state.items.length} · ${updated} updated this month`;
   if (!items.length) {
     renderEmpty(state.items.length
       ? 'No items match your search or filter.'

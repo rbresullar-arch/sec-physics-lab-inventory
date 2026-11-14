@@ -112,6 +112,9 @@ select { width: auto; cursor: pointer; }
 .row-sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-side { display: flex; align-items: center; gap: 10px; }
 .row-pics { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tag { white-space: nowrap; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.tag.updated { color: #15803D; background: #DCFCE7; }
+.tag.stale { color: #C2410C; background: #FFEDD5; }
 .chev { color: var(--muted); font-size: 20px; line-height: 1; transition: transform .15s; }
 .row.open .chev { transform: rotate(90deg); color: var(--primary); }
 
